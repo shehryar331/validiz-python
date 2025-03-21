@@ -187,7 +187,7 @@ class AsyncValidiz(BaseClient):
     
     async def download_file(self, file_id: str, output_path: Optional[str] = None) -> str:
         """
-        Download the results of a completed file validation job asynchronously.
+        Download the results of a completed file validation job asynchronously and save to disk.
         
         Args:
             file_id: ID of the file upload
@@ -209,6 +209,23 @@ class AsyncValidiz(BaseClient):
             await f.write(response.get("content"))
         
         return output_path
+    
+    async def get_file_content(self, file_id: str) -> bytes:
+        """
+        Get the content of a completed file validation job asynchronously without saving to disk.
+        
+        Args:
+            file_id: ID of the file upload
+            
+        Returns:
+            File content as bytes
+        """
+        response = await self._make_request(
+            method="GET",
+            endpoint=f"validate/file/{file_id}/download"
+        )
+        
+        return response.get("content")
     
     async def close(self):
         """

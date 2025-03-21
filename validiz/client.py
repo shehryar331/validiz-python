@@ -151,7 +151,7 @@ class Validiz(BaseClient):
     
     def download_file(self, file_id: str, output_path: Optional[str] = None) -> str:
         """
-        Download the results of a completed file validation job.
+        Download the results of a completed file validation job and save to disk.
         
         Args:
             file_id: ID of the file upload
@@ -172,4 +172,21 @@ class Validiz(BaseClient):
         with open(output_path, "wb") as f:
             f.write(response.get("content"))
         
-        return output_path 
+        return output_path
+    
+    def get_file_content(self, file_id: str) -> bytes:
+        """
+        Get the content of a completed file validation job without saving to disk.
+        
+        Args:
+            file_id: ID of the file upload
+            
+        Returns:
+            File content as bytes
+        """
+        response = self._make_request(
+            method="GET",
+            endpoint=f"validate/file/{file_id}/download"
+        )
+        
+        return response.get("content") 

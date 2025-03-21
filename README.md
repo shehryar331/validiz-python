@@ -8,6 +8,16 @@ A Python client library for the Validiz Email Validation API. This library provi
 pip install validiz
 ```
 
+## Requirements
+
+Python 3.9 or higher is required. All dependencies will be installed automatically when installing the package.
+
+Alternatively, you can install the dependencies directly from the requirements.txt file:
+
+```bash
+pip install -r requirements.txt
+```
+
 ## Features
 
 - Both synchronous and asynchronous clients
@@ -125,7 +135,43 @@ if status["status"] == "completed":
 
 # Or use the polling method to wait for completion and get results as DataFrame
 import pandas as pd
-df = client.poll_file_until_complete(file_id, interval=5, max_retries=60)
+
+# Get results as DataFrame without saving to disk
+df = client.poll_file_until_complete(
+    file_id=file_id, 
+    interval=5, 
+    max_retries=60,
+    output_path=None,  # No file will be saved
+    return_dataframe=True
+)
+
+# Or save the file and get the DataFrame
+df = client.poll_file_until_complete(
+    file_id=file_id, 
+    interval=5, 
+    max_retries=60,
+    output_path="results.csv",  # File will be saved here
+    return_dataframe=True
+)
+
+# Or get the file path
+file_path = client.poll_file_until_complete(
+    file_id=file_id, 
+    interval=5, 
+    max_retries=60,
+    output_path="results.csv",
+    return_dataframe=False
+)
+
+# Or get the raw content as bytes
+content = client.poll_file_until_complete(
+    file_id=file_id, 
+    interval=5, 
+    max_retries=60,
+    output_path=None,
+    return_dataframe=False
+)
+
 # Process results
 print(f"Number of validated emails: {len(df)}")
 print(df.head())
@@ -144,7 +190,16 @@ if status["status"] == "completed":
 
 # Or use the polling method to wait for completion and get results as DataFrame
 import pandas as pd
-df = await client.poll_file_until_complete(file_id, interval=5, max_retries=60)
+
+# Get results as DataFrame without saving to disk
+df = await client.poll_file_until_complete(
+    file_id=file_id, 
+    interval=5, 
+    max_retries=60,
+    output_path=None,  # No file will be saved
+    return_dataframe=True
+)
+
 # Process results
 print(f"Number of validated emails: {len(df)}")
 print(df.head())
@@ -202,8 +257,8 @@ async def process_multiple_files():
         # Get file IDs
         file_ids = [result["file_id"] for result in upload_results]
         
-        # Poll for completion and get results
-        poll_tasks = [client.poll_file_until_complete(file_id) for file_id in file_ids]
+        # Poll for completion and get results without saving to disk
+        poll_tasks = [client.poll_file_until_complete(file_id, output_path=None) for file_id in file_ids]
         dataframes = await asyncio.gather(*poll_tasks)
         
         # Process results

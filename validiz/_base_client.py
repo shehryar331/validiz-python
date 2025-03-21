@@ -2,6 +2,7 @@ import os
 from typing import Dict, Any, List, Optional, Union, TypeVar, Generic, Protocol
 
 import pandas as pd
+import io
 
 from validiz._exceptions import ValidizError
 
@@ -83,6 +84,22 @@ class BaseClient:
         """
         raise NotImplementedError("This method must be implemented by subclasses")
     
+    def get_file_content(self, file_id: str) -> bytes:
+        """
+        Get the content of a completed file validation job as bytes.
+        This is a placeholder method that should be overridden by subclasses.
+        
+        Args:
+            file_id: ID of the file upload
+            
+        Returns:
+            File content as bytes
+            
+        Raises:
+            NotImplementedError: This method must be implemented by subclasses
+        """
+        raise NotImplementedError("This method must be implemented by subclasses")
+    
     def poll_file_until_complete(
         self, 
         file_id: str, 
@@ -90,7 +107,7 @@ class BaseClient:
         max_retries: int = 60,
         output_path: Optional[str] = None,
         return_dataframe: bool = True
-    ) -> Union[pd.DataFrame, str]:
+    ) -> Union[pd.DataFrame, str, bytes]:
         """
         Poll the status of a file until it is complete, then download and return the results.
         This is a template method that uses abstract methods implemented by subclasses.
@@ -99,12 +116,13 @@ class BaseClient:
             file_id: ID of the file upload
             interval: Polling interval in seconds
             max_retries: Maximum number of polling attempts
-            output_path: Path to save the downloaded file, if None, a temp file is used
+            output_path: Path to save the downloaded file. If None, the file will not be saved locally.
             return_dataframe: Whether to return the results as a pandas DataFrame
             
         Returns:
             If return_dataframe is True, returns a pandas DataFrame with the validation results.
-            Otherwise, returns the path to the downloaded file.
+            If return_dataframe is False and output_path is provided, returns the path to the downloaded file.
+            If return_dataframe is False and output_path is None, returns the file content as bytes.
             
         Raises:
             TimeoutError: If the file processing takes longer than interval * max_retries seconds
@@ -114,23 +132,40 @@ class BaseClient:
             status = self.get_file_status(file_id)
             
             if status["status"] == "completed":
-                # Download the file
-                file_path = self.download_file(file_id, output_path)
-                
-                if return_dataframe:
-                    # Try to determine the file format and read it
-                    try:
-                        if file_path.endswith(".csv"):
-                            return pd.read_csv(file_path)
-                        elif file_path.endswith(".xlsx") or file_path.endswith(".xls"):
-                            return pd.read_excel(file_path)
-                        else:
-                            # Default to CSV
-                            return pd.read_csv(file_path)
-                    except Exception as e:
-                        raise ValidizError(f"Error parsing result file: {str(e)}")
+                # If output_path is provided, download the file to disk
+                if output_path is not None:
+                    file_path = self.download_file(file_id, output_path)
+                    
+                    if return_dataframe:
+                        # Try to determine the file format and read it
+                        try:
+                            if file_path.endswith(".csv"):
+                                return pd.read_csv(file_path)
+                            elif file_path.endswith(".xlsx") or file_path.endswith(".xls"):
+                                return pd.read_excel(file_path)
+                            else:
+                                # Default to CSV
+                                return pd.read_csv(file_path)
+                        except Exception as e:
+                            raise ValidizError(f"Error parsing result file: {str(e)}")
+                    else:
+                        return file_path
+                # If output_path is None, get the content in memory
                 else:
-                    return file_path
+                    content = self.get_file_content(file_id)
+                    
+                    if return_dataframe:
+                        try:
+                            # Attempt to parse as CSV by default
+                            return pd.read_csv(io.BytesIO(content))
+                        except Exception as e:
+                            try:
+                                # If CSV fails, try Excel
+                                return pd.read_excel(io.BytesIO(content))
+                            except Exception:
+                                raise ValidizError(f"Error parsing file content: {str(e)}")
+                    else:
+                        return content
             
             elif status["status"] == "failed":
                 error_message = status.get("error_message", "File processing failed")
