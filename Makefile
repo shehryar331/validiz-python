@@ -16,3 +16,11 @@ mypy:
 
 .PHONY: qa
 qa: sort format lint
+
+.PHONY: test
+test:
+	uv run pytest
+
+.PHONY: test-coverage
+test-coverage:
+	uv run pytest --cov=validiz --cov-report=term-missing
