@@ -1,5 +1,10 @@
 # Validiz Python Library
 
+[![PyPI version](https://img.shields.io/pypi/v/validiz.svg)](https://pypi.org/project/validiz/)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/validiz.svg)](https://pypi.org/project/validiz/)
+[![PyPI - Status](https://img.shields.io/pypi/status/validiz.svg)](https://pypi.org/project/validiz/)
+[![PyPI - License](https://img.shields.io/pypi/l/validiz.svg)](https://pypi.org/project/validiz/)
+
 A Python client library for the Validiz Email Validation API. This library provides both synchronous and asynchronous clients for interacting with the API endpoints.
 
 ## Installation
