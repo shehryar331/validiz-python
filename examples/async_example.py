@@ -5,7 +5,7 @@ Example usage of the asynchronous Validiz client.
 
 import asyncio
 
-from validiz import AsyncValidizClient, ValidizError, ValidizConnectionError
+from validiz import AsyncValidiz, ValidizError, ValidizConnectionError
 
 
 async def validate_email_example(api_key):
@@ -13,7 +13,7 @@ async def validate_email_example(api_key):
     print("\n=== Async Email Validation Example ===\n")
     
     # Create a client with API key
-    async with AsyncValidizClient(api_key=api_key) as client:
+    async with AsyncValidiz(api_key=api_key) as client:
         # Validate a single email
         email = "test@example.com"
         print(f"Validating email: {email}")
@@ -52,7 +52,7 @@ async def upload_file_example(api_key, file_path):
     print("\n=== Async File Upload Example ===\n")
     
     # Create a client with API key
-    async with AsyncValidizClient(api_key=api_key) as client:
+    async with AsyncValidiz(api_key=api_key) as client:
         try:
             # Upload the file
             print(f"Uploading file: {file_path}")
@@ -79,25 +79,54 @@ async def upload_file_example(api_key, file_path):
             print(f"File error: {str(e)}")
 
 
-async def check_health_example(api_key):
-    """Example of checking the API health asynchronously."""
-    print("\n=== Async Health Check Example ===\n")
+async def poll_file_example(api_key, file_path):
+    """Example of uploading a file and polling for completion asynchronously."""
+    print("\n=== Async File Upload with Polling Example ===\n")
     
     # Create a client with API key
-    async with AsyncValidizClient(api_key=api_key) as client:
+    async with AsyncValidiz(api_key=api_key) as client:
         try:
-            # Check API health
-            print("Checking API health...")
-            health = await client.check_health()
-            print(f"Status: {health.get('status', 'unknown')}")
-            print(f"API version: {health.get('api_version', 'unknown')}")
-            print(f"Environment: {health.get('environment', 'unknown')}")
-            print(f"Database: {health.get('database', 'unknown')}")
+            # Upload the file
+            print(f"Uploading file: {file_path}")
+            upload_result = await client.upload_file(file_path)
+            file_id = upload_result["file_id"]
+            print(f"File uploaded successfully! File ID: {file_id}")
+            
+            # Poll for completion and get results as DataFrame
+            print("\nPolling for completion...")
+            print("This might take a while depending on the file size and server load...")
+            
+            # Poll for completion with a timeout of 5 minutes (polling every 10 seconds)
+            df = await client.poll_file_until_complete(
+                file_id=file_id,
+                interval=10,
+                max_retries=30
+            )
+            
+            # Process and display results
+            print("\nFile processing completed!")
+            print(f"Number of emails processed: {len(df)}")
+            
+            # Count valid and invalid emails
+            valid_count = df[df['is_valid'] == True].shape[0] if 'is_valid' in df.columns else 0
+            invalid_count = df[df['is_valid'] == False].shape[0] if 'is_valid' in df.columns else 0
+            
+            print(f"Valid emails: {valid_count}")
+            print(f"Invalid emails: {invalid_count}")
+            
+            # Display first few rows
+            if not df.empty:
+                print("\nSample of results:")
+                print(df.head())
         
         except ValidizError as e:
             print(f"API error: {e.message}")
         except ValidizConnectionError as e:
             print(f"Connection error: {e.message}")
+        except TimeoutError as e:
+            print(f"Timeout error: {str(e)}")
+        except FileNotFoundError as e:
+            print(f"File error: {str(e)}")
 
 
 async def parallel_validation_example(api_key):
@@ -105,7 +134,7 @@ async def parallel_validation_example(api_key):
     print("\n=== Async Parallel Validation Example ===\n")
     
     # Create a client with API key
-    async with AsyncValidizClient(api_key=api_key) as client:
+    async with AsyncValidiz(api_key=api_key) as client:
         # List of emails to validate
         emails = [
             "test1@example.com",
@@ -138,6 +167,66 @@ async def parallel_validation_example(api_key):
             print(f"Unexpected error: {str(e)}")
 
 
+async def batch_file_processing_example(api_key, file_paths):
+    """Example of processing multiple files in parallel."""
+    print("\n=== Async Batch File Processing Example ===\n")
+    
+    if not file_paths:
+        print("No files provided. Skipping example.")
+        return
+    
+    # Create a client with API key
+    async with AsyncValidiz(api_key=api_key) as client:
+        try:
+            print(f"Processing {len(file_paths)} files in parallel...")
+            
+            # Upload all files
+            upload_tasks = []
+            for file_path in file_paths:
+                print(f"Uploading file: {file_path}")
+                upload_tasks.append(client.upload_file(file_path))
+            
+            # Wait for all uploads to complete
+            upload_results = await asyncio.gather(*upload_tasks, return_exceptions=True)
+            
+            # Process each upload result
+            file_ids = []
+            for i, result in enumerate(upload_results):
+                if isinstance(result, Exception):
+                    print(f"Error uploading {file_paths[i]}: {str(result)}")
+                else:
+                    file_id = result["file_id"]
+                    file_ids.append(file_id)
+                    print(f"File {file_paths[i]} uploaded successfully! File ID: {file_id}")
+            
+            if not file_ids:
+                print("No files were uploaded successfully.")
+                return
+            
+            # Poll for completion in parallel
+            print("\nPolling for completion...")
+            poll_tasks = [client.poll_file_until_complete(file_id, interval=10) for file_id in file_ids]
+            result_dfs = await asyncio.gather(*poll_tasks, return_exceptions=True)
+            
+            # Process results
+            for i, result in enumerate(result_dfs):
+                if isinstance(result, Exception):
+                    print(f"Error processing file {file_ids[i]}: {str(result)}")
+                else:
+                    print(f"\nResults for file ID {file_ids[i]}:")
+                    print(f"Number of emails processed: {len(result)}")
+                    
+                    # Count valid and invalid emails
+                    valid_count = result[result['is_valid'] == True].shape[0] if 'is_valid' in result.columns else 0
+                    invalid_count = result[result['is_valid'] == False].shape[0] if 'is_valid' in result.columns else 0
+                    
+                    print(f"Valid emails: {valid_count}")
+                    print(f"Invalid emails: {invalid_count}")
+        
+        except Exception as e:
+            print(f"Unexpected error: {str(e)}")
+
+
 async def main():
     # Replace with your actual API key
     API_KEY = "your_api_key_here"
@@ -145,14 +234,18 @@ async def main():
     # Replace with your actual file path
     FILE_PATH = "emails.csv"
     
+    # For batch processing example
+    MULTIPLE_FILES = ["emails1.csv", "emails2.csv", "emails3.csv"]
+    
     print("Validiz Python Library - Asynchronous Examples")
     print("==============================================")
     
     # Run the examples
     await validate_email_example(API_KEY)
     await upload_file_example(API_KEY, FILE_PATH)
-    await check_health_example(API_KEY)
+    await poll_file_example(API_KEY, FILE_PATH)
     await parallel_validation_example(API_KEY)
+    await batch_file_processing_example(API_KEY, MULTIPLE_FILES)
     
     print("\nExamples completed.")
 

@@ -1,0 +1,11 @@
+*.ipynb
+**/.ipynb_checkpoints
+**/__pycache__
+**/.pytest_cache
+**/.ruff_cache
+**/.mypy_cache
+**/.DS_Store
+**/.venv
+test_files/
+.env
+*.csv

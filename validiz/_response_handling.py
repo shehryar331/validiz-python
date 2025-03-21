@@ -4,7 +4,7 @@ from typing import Dict, Any
 import requests
 import aiohttp
 
-from validiz.exceptions import (
+from validiz._exceptions import (
     ValidizError,
     ValidizAuthError,
     ValidizRateLimitError,

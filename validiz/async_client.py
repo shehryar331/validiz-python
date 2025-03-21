@@ -1,14 +1,17 @@
 import os
+import asyncio
 from typing import Dict, Any, List, Optional, Union
 
+import aiofiles
 import aiohttp
+import pandas as pd
 
-from validiz.base_client import BaseClient
-from validiz.exceptions import ValidizConnectionError
-from validiz.response_handling import handle_async_response
+from validiz._base_client import BaseClient
+from validiz._exceptions import ValidizConnectionError, ValidizError
+from validiz._response_handling import handle_async_response
 
 
-class AsyncValidizClient(BaseClient):
+class AsyncValidiz(BaseClient):
     """
     Asynchronous client for the Validiz API.
     
@@ -19,8 +22,7 @@ class AsyncValidizClient(BaseClient):
         self,
         api_key: Optional[str] = None,
         api_base_url: str = "https://api.validiz.com/v1",
-        timeout: float = 30.0,
-        session: Optional[aiohttp.ClientSession] = None
+        timeout: int = 30
     ):
         """
         Initialize the asynchronous client.
@@ -29,37 +31,29 @@ class AsyncValidizClient(BaseClient):
             api_key: API key for authentication
             api_base_url: Base URL for API endpoints
             timeout: Request timeout in seconds
-            session: Optional aiohttp ClientSession to use
         """
         super().__init__(api_key, api_base_url)
         self.timeout = timeout
-        self._session = session
-        self._owned_session = False
+        self._session = None
     
-    async def __aenter__(self):
-        """Create a session if one doesn't exist."""
-        if self._session is None:
-            self._session = aiohttp.ClientSession()
-            self._owned_session = True
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """Close the session if we created it."""
-        if self._owned_session and self._session is not None:
-            await self._session.close()
-            self._session = None
-            self._owned_session = False
+    async def _wait_interval(self, interval: int):
+        """
+        Wait for the specified interval.
+        
+        Args:
+            interval: The number of seconds to wait
+        """
+        await asyncio.sleep(interval)
     
     async def _get_session(self) -> aiohttp.ClientSession:
         """
-        Get or create a client session.
+        Get or create an aiohttp ClientSession.
         
         Returns:
-            aiohttp.ClientSession
+            An aiohttp ClientSession
         """
-        if self._session is None:
+        if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession()
-            self._owned_session = True
         return self._session
     
     async def _make_request(
@@ -68,18 +62,16 @@ class AsyncValidizClient(BaseClient):
         endpoint: str,
         params: Optional[Dict[str, Any]] = None,
         json_data: Optional[Dict[str, Any]] = None,
-        data: Optional[Dict[str, Any]] = None,
         files: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Make an HTTP request and handle the response.
+        Make an asynchronous HTTP request and handle the response.
         
         Args:
             method: HTTP method (GET, POST, etc.)
             endpoint: API endpoint path
             params: Optional query parameters
             json_data: Optional JSON body
-            data: Optional form data
             files: Optional files to upload
             
         Returns:
@@ -90,35 +82,38 @@ class AsyncValidizClient(BaseClient):
         session = await self._get_session()
         
         try:
-            # Handle file uploads
-            form_data = None
             if files:
+                # Handle file uploads
                 form_data = aiohttp.FormData()
-                for key, (filename, file_obj) in files.items():
-                    form_data.add_field(
-                        key,
-                        file_obj.read(),
-                        filename=filename
-                    )
-            
-            timeout = aiohttp.ClientTimeout(total=self.timeout)
-            
-            async with session.request(
-                method=method,
-                url=url,
-                headers=headers,
-                params=params,
-                json=json_data,
-                data=form_data or data,
-                timeout=timeout
-            ) as response:
-                return await handle_async_response(response)
+                for key, (file_name, file_obj) in files.items():
+                    form_data.add_field(key, file_obj, filename=file_name)
+                
+                async with session.request(
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    params=params,
+                    data=form_data,
+                    timeout=self.timeout
+                ) as response:
+                    return await handle_async_response(response)
+            else:
+                # Standard request with JSON data
+                async with session.request(
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    params=params,
+                    json=json_data,
+                    timeout=self.timeout
+                ) as response:
+                    return await handle_async_response(response)
         except aiohttp.ClientError as e:
             raise ValidizConnectionError(f"Connection error: {str(e)}")
     
     async def validate_email(self, emails: Union[str, List[str]]) -> List[Dict[str, Any]]:
         """
-        Validate one or more email addresses.
+        Validate one or more email addresses asynchronously.
         
         Args:
             emails: Email address or list of email addresses to validate
@@ -144,7 +139,7 @@ class AsyncValidizClient(BaseClient):
     
     async def upload_file(self, file_path: str) -> Dict[str, Any]:
         """
-        Upload a file containing email addresses for validation.
+        Upload a file containing email addresses for validation asynchronously.
         
         Args:
             file_path: Path to the file containing email addresses
@@ -156,19 +151,28 @@ class AsyncValidizClient(BaseClient):
             raise FileNotFoundError(f"File not found: {file_path}")
         
         file_name = os.path.basename(file_path)
-        with open(file_path, "rb") as f:
-            files = {"file": (file_name, f)}
+        file_content = None
+        
+        try:
+            async with aiofiles.open(file_path, mode="rb") as f:
+                file_content = await f.read()
+            
+            files = {"file": (file_name, file_content)}
+            
             response = await self._make_request(
                 method="POST",
                 endpoint="validate/file",
                 files=files
             )
-        
-        return response
+            return response
+        except Exception as e:
+            if isinstance(e, ValidizConnectionError) or isinstance(e, ValidizError):
+                raise
+            raise ValidizError(f"Error uploading file: {str(e)}")
     
     async def get_file_status(self, file_id: str) -> Dict[str, Any]:
         """
-        Check the status of a file validation job.
+        Check the status of a file validation job asynchronously.
         
         Args:
             file_id: ID of the file upload
@@ -183,7 +187,7 @@ class AsyncValidizClient(BaseClient):
     
     async def download_file(self, file_id: str, output_path: Optional[str] = None) -> str:
         """
-        Download the results of a completed file validation job.
+        Download the results of a completed file validation job asynchronously.
         
         Args:
             file_id: ID of the file upload
@@ -201,34 +205,15 @@ class AsyncValidizClient(BaseClient):
         if output_path is None:
             output_path = f"validiz_results_{file_id}.csv"
         
-        with open(output_path, "wb") as f:
-            f.write(response.get("content"))
+        async with aiofiles.open(output_path, mode="wb") as f:
+            await f.write(response.get("content"))
         
         return output_path
     
-    async def check_health(self) -> Dict[str, Any]:
+    async def close(self):
         """
-        Check the health status of the API.
-        
-        Returns:
-            Dict containing health status information
+        Close the aiohttp session to free up resources.
         """
-        # Health endpoint is at the base URL without the /v1 prefix
-        base_url = self.api_base_url.split("/v1")[0]
-        url = f"{base_url}/health"
-        
-        session = await self._get_session()
-        timeout = aiohttp.ClientTimeout(total=self.timeout)
-        
-        try:
-            async with session.get(url, timeout=timeout) as response:
-                return await handle_async_response(response)
-        except aiohttp.ClientError as e:
-            raise ValidizConnectionError(f"Connection error: {str(e)}")
-    
-    async def close(self) -> None:
-        """Close the client session."""
-        if self._owned_session and self._session is not None:
+        if self._session and not self._session.closed:
             await self._session.close()
-            self._session = None
-            self._owned_session = False 
+            self._session = None 

@@ -10,7 +10,7 @@ setup(
     description="A Python client library for the Validiz Email Validation API",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    author="Shehryar Dev",
+    author="Shehryar Sohail",
     author_email="shehryardev@paklogics.com",
     url="https://github.com/shehryardev/validiz-python",
     packages=find_packages(),
@@ -31,6 +31,7 @@ setup(
     install_requires=[
         "requests>=2.25.0",
         "aiohttp>=3.8.0",
+        "pandas>=1.0.0",
     ],
     keywords="email, validation, api, client, async",
 ) 

@@ -3,7 +3,7 @@
 Example usage of the synchronous Validiz client.
 """
 
-from validiz import ValidizClient, ValidizError, ValidizConnectionError
+from validiz import Validiz, ValidizError, ValidizConnectionError
 
 
 def validate_email_example(api_key):
@@ -11,7 +11,7 @@ def validate_email_example(api_key):
     print("\n=== Email Validation Example ===\n")
     
     # Create a client with API key
-    client = ValidizClient(api_key=api_key)
+    client = Validiz(api_key=api_key)
     
     # Validate a single email
     email = "test@example.com"
@@ -51,7 +51,7 @@ def upload_file_example(api_key, file_path):
     print("\n=== File Upload Example ===\n")
     
     # Create a client with API key
-    client = ValidizClient(api_key=api_key)
+    client = Validiz(api_key=api_key)
     
     try:
         # Upload the file
@@ -79,26 +79,55 @@ def upload_file_example(api_key, file_path):
         print(f"File error: {str(e)}")
 
 
-def check_health_example(api_key):
-    """Example of checking the API health."""
-    print("\n=== Health Check Example ===\n")
+def poll_file_example(api_key, file_path):
+    """Example of uploading a file and polling for completion."""
+    print("\n=== File Upload with Polling Example ===\n")
     
     # Create a client with API key
-    client = ValidizClient(api_key=api_key)
+    client = Validiz(api_key=api_key)
     
     try:
-        # Check API health
-        print("Checking API health...")
-        health = client.check_health()
-        print(f"Status: {health.get('status', 'unknown')}")
-        print(f"API version: {health.get('api_version', 'unknown')}")
-        print(f"Environment: {health.get('environment', 'unknown')}")
-        print(f"Database: {health.get('database', 'unknown')}")
+        # Upload the file
+        print(f"Uploading file: {file_path}")
+        upload_result = client.upload_file(file_path)
+        file_id = upload_result["file_id"]
+        print(f"File uploaded successfully! File ID: {file_id}")
+        
+        # Poll for completion and get results as DataFrame
+        print("\nPolling for completion...")
+        print("This might take a while depending on the file size and server load...")
+        
+        # Poll for completion with a timeout of 5 minutes (polling every 10 seconds)
+        df = client.poll_file_until_complete(
+            file_id=file_id,
+            interval=10,
+            max_retries=30
+        )
+        
+        # Process and display results
+        print("\nFile processing completed!")
+        print(f"Number of emails processed: {len(df)}")
+        
+        # Count valid and invalid emails
+        valid_count = df[df['is_valid'] == True].shape[0] if 'is_valid' in df.columns else 0
+        invalid_count = df[df['is_valid'] == False].shape[0] if 'is_valid' in df.columns else 0
+        
+        print(f"Valid emails: {valid_count}")
+        print(f"Invalid emails: {invalid_count}")
+        
+        # Display first few rows
+        if not df.empty:
+            print("\nSample of results:")
+            print(df.head())
     
     except ValidizError as e:
         print(f"API error: {e.message}")
     except ValidizConnectionError as e:
         print(f"Connection error: {e.message}")
+    except TimeoutError as e:
+        print(f"Timeout error: {str(e)}")
+    except FileNotFoundError as e:
+        print(f"File error: {str(e)}")
 
 
 if __name__ == "__main__":
@@ -114,6 +143,6 @@ if __name__ == "__main__":
     # Run the examples
     validate_email_example(API_KEY)
     upload_file_example(API_KEY, FILE_PATH)
-    check_health_example(API_KEY)
+    poll_file_example(API_KEY, FILE_PATH)
     
     print("\nExamples completed.") 

@@ -1,14 +1,16 @@
 import os
+import time
 from typing import Dict, Any, List, Optional, Union
 
+import pandas as pd
 import requests
 
-from validiz.base_client import BaseClient
-from validiz.exceptions import ValidizConnectionError
-from validiz.response_handling import handle_sync_response
+from validiz._base_client import BaseClient
+from validiz._exceptions import ValidizConnectionError, ValidizError
+from validiz._response_handling import handle_sync_response
 
 
-class ValidizClient(BaseClient):
+class Validiz(BaseClient):
     """
     Synchronous client for the Validiz API.
     
@@ -31,6 +33,15 @@ class ValidizClient(BaseClient):
         """
         super().__init__(api_key, api_base_url)
         self.timeout = timeout
+    
+    def _wait_interval(self, interval: int):
+        """
+        Wait for the specified interval.
+        
+        Args:
+            interval: The number of seconds to wait
+        """
+        time.sleep(interval)
     
     def _make_request(
         self,
@@ -161,21 +172,4 @@ class ValidizClient(BaseClient):
         with open(output_path, "wb") as f:
             f.write(response.get("content"))
         
-        return output_path
-    
-    def check_health(self) -> Dict[str, Any]:
-        """
-        Check the health status of the API.
-        
-        Returns:
-            Dict containing health status information
-        """
-        # Health endpoint is at the base URL without the /v1 prefix
-        base_url = self.api_base_url.split("/v1")[0]
-        url = f"{base_url}/health"
-        
-        try:
-            response = requests.get(url, timeout=self.timeout)
-            return handle_sync_response(response)
-        except requests.RequestException as e:
-            raise ValidizConnectionError(f"Connection error: {str(e)}") 
+        return output_path 
