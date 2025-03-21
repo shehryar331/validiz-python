@@ -1,4 +1,4 @@
-from setuptools import setup, find_packages
+from setuptools import find_packages, setup
 
 # Read the contents of the README file
 with open("README.md", "r", encoding="utf-8") as f:
@@ -27,4 +27,4 @@ setup(
     python_requires=">=3.9",
     install_requires=open("requirements.txt").read().splitlines(),
     keywords="email, validation, api, client, async",
-) 
+)
