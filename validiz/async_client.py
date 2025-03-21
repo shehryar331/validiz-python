@@ -8,6 +8,7 @@ import aiohttp
 from validiz._base_client import BaseClient
 from validiz._exceptions import ValidizConnectionError, ValidizError
 from validiz._response_handling import handle_async_response
+from validiz._schema import EmailResponse
 
 
 class AsyncValidiz(BaseClient):
@@ -112,7 +113,7 @@ class AsyncValidiz(BaseClient):
 
     async def validate_email(
         self, emails: Union[str, List[str]]
-    ) -> List[Dict[str, Any]]:
+    ) -> List[EmailResponse]:
         """
         Validate one or more email addresses asynchronously.
 
@@ -120,7 +121,7 @@ class AsyncValidiz(BaseClient):
             emails: Email address or list of email addresses to validate
 
         Returns:
-            List of dicts containing validation results
+            List of EmailResponse instances containing validation results
         """
         if isinstance(emails, str):
             emails = [emails]
@@ -131,10 +132,7 @@ class AsyncValidiz(BaseClient):
             method="POST", endpoint="validate/email", json_data=data
         )
 
-        # The response could be a single dict or a list of dicts
-        if isinstance(response, dict):
-            return [response]
-        return response
+        return [EmailResponse(**res) for res in response]
 
     async def upload_file(self, file_path: str) -> Dict[str, Any]:
         """
@@ -200,7 +198,13 @@ class AsyncValidiz(BaseClient):
 
         # Handle file download
         if output_path is None:
-            output_path = f"validiz_results_{file_id}.csv"
+            content_type = response.get("content_type", "").lower()
+            ext = ".csv"
+            if "spreadsheetml.sheet" in content_type:
+                ext = ".xlsx"
+            elif "excel" in content_type:
+                ext = ".xls"
+            output_path = f"validiz_results_{file_id}{ext}"
 
         async with aiofiles.open(output_path, mode="wb") as f:
             await f.write(response.get("content"))
