@@ -1,9 +1,11 @@
 import asyncio
+import io
 import os
 from typing import Any, Dict, List, Optional, Union
 
 import aiofiles
 import aiohttp
+import pandas as pd
 
 from validiz._base_client import BaseClient
 from validiz._exceptions import ValidizConnectionError, ValidizError
@@ -20,7 +22,7 @@ class AsyncValidiz(BaseClient):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str,
         api_base_url: str = "https://api.validiz.com/v1",
         timeout: int = 30,
     ):
@@ -34,7 +36,7 @@ class AsyncValidiz(BaseClient):
         """
         super().__init__(api_key, api_base_url)
         self.timeout = timeout
-        self._session = None
+        self._session: Optional[aiohttp.ClientSession] = None
 
     async def _wait_interval(self, interval: int):
         """
@@ -53,7 +55,9 @@ class AsyncValidiz(BaseClient):
             An aiohttp ClientSession
         """
         if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=self.timeout)
+            )
         return self._session
 
     async def _make_request(
@@ -132,6 +136,12 @@ class AsyncValidiz(BaseClient):
             method="POST", endpoint="validate/email", json_data=data
         )
 
+        if not isinstance(response, list):
+            raise ValueError("Expected a list response from validate_email API call")
+        for res in response:
+            if not isinstance(res, dict):
+                raise ValueError(f"Expected dict in response, got {type(res)}")
+
         return [EmailResponse(**res) for res in response]
 
     async def upload_file(self, file_path: str) -> Dict[str, Any]:
@@ -207,7 +217,10 @@ class AsyncValidiz(BaseClient):
             output_path = f"validiz_results_{file_id}{ext}"
 
         async with aiofiles.open(output_path, mode="wb") as f:
-            await f.write(response.get("content"))
+            content = response.get("content")
+            if not isinstance(content, bytes):
+                raise ValueError("Downloaded content is not of type bytes")
+            await f.write(content)
 
         return output_path
 
@@ -225,7 +238,91 @@ class AsyncValidiz(BaseClient):
             method="GET", endpoint=f"validate/file/{file_id}/download"
         )
 
-        return response.get("content")
+        content = response.get("content")
+        if not isinstance(content, bytes):
+            raise ValueError("Downloaded content is not of type bytes")
+        return content
+
+    async def poll_file_until_complete(
+        self,
+        file_id: str,
+        interval: int = 5,
+        max_retries: int = 60,
+        output_path: Optional[str] = None,
+        return_dataframe: bool = True,
+    ) -> Union[pd.DataFrame, str, bytes]:
+        """
+        Poll the status of a file until it is complete, then download and return the results asynchronously.
+
+        Args:
+            file_id: ID of the file upload
+            interval: Polling interval in seconds
+            max_retries: Maximum number of polling attempts
+            output_path: Path to save the downloaded file. If None, the file will not be saved locally.
+            return_dataframe: Whether to return the results as a pandas DataFrame
+
+        Returns:
+            If return_dataframe is True, returns a pandas DataFrame with the validation results.
+            If return_dataframe is False and output_path is provided, returns the path to the downloaded file.
+            If return_dataframe is False and output_path is None, returns the file content as bytes.
+
+        Raises:
+            TimeoutError: If the file processing takes longer than interval * max_retries seconds
+            ValidizError: If there's an error with the API call
+        """
+        for attempt in range(max_retries):
+            status = await self.get_file_status(file_id)
+
+            if status["status"] == "completed":
+                # If output_path is provided, download the file to disk
+                if output_path is not None:
+                    file_path = await self.download_file(file_id, output_path)
+
+                    if return_dataframe:
+                        # Try to determine the file format and read it
+                        try:
+                            if file_path.endswith(".csv"):
+                                return pd.read_csv(file_path)
+                            elif file_path.endswith(".xlsx") or file_path.endswith(
+                                ".xls"
+                            ):
+                                return pd.read_excel(file_path)
+                            else:
+                                # Default to CSV
+                                return pd.read_csv(file_path)
+                        except Exception as e:
+                            raise ValidizError(f"Error parsing result file: {str(e)}")
+                    else:
+                        return file_path
+                # If output_path is None, get the content in memory
+                else:
+                    content = await self.get_file_content(file_id)
+
+                    if return_dataframe:
+                        try:
+                            # Attempt to parse as CSV by default
+                            return pd.read_csv(io.BytesIO(content))
+                        except Exception as e:
+                            try:
+                                # If CSV fails, try Excel
+                                return pd.read_excel(io.BytesIO(content))
+                            except Exception:
+                                raise ValidizError(
+                                    f"Error parsing file content: {str(e)}"
+                                )
+                    else:
+                        return content
+
+            elif status["status"] == "failed":
+                error_message = status.get("error_message", "File processing failed")
+                raise ValidizError(error_message)
+
+            # Wait for the next polling interval
+            await self._wait_interval(interval)
+
+        raise TimeoutError(
+            f"File processing timed out after {interval * max_retries} seconds"
+        )
 
     async def close(self):
         """

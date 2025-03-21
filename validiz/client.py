@@ -1,11 +1,13 @@
+import io
 import os
 import time
 from typing import Any, Dict, List, Optional, Union
 
+import pandas as pd
 import requests
 
 from validiz._base_client import BaseClient
-from validiz._exceptions import ValidizConnectionError
+from validiz._exceptions import ValidizConnectionError, ValidizError
 from validiz._response_handling import handle_sync_response
 from validiz._schema import EmailResponse
 
@@ -19,7 +21,7 @@ class Validiz(BaseClient):
 
     def __init__(
         self,
-        api_key: Optional[str] = None,
+        api_key: str,
         api_base_url: str = "https://api.validiz.com/v1",
         timeout: int = 30,
     ):
@@ -99,6 +101,11 @@ class Validiz(BaseClient):
         response = self._make_request(
             method="POST", endpoint="validate/email", json_data=data
         )
+        if not isinstance(response, list):
+            raise ValueError("Expected a list response from validate_email API call")
+        for res in response:
+            if not isinstance(res, dict):
+                raise ValueError(f"Expected dict in response, got {type(res)}")
 
         return [EmailResponse(**res) for res in response]
 
@@ -167,7 +174,10 @@ class Validiz(BaseClient):
             output_path = f"validiz_results_{file_id}{ext}"
 
         with open(output_path, "wb") as f:
-            f.write(response.get("content"))
+            content = response.get("content")
+            if not isinstance(content, bytes):
+                raise ValueError("Downloaded content is not of type bytes")
+            f.write(content)
 
         return output_path
 
@@ -185,4 +195,88 @@ class Validiz(BaseClient):
             method="GET", endpoint=f"validate/file/{file_id}/download"
         )
 
-        return response.get("content")
+        content = response.get("content")
+        if not isinstance(content, bytes):
+            raise ValueError("Downloaded content is not of type bytes")
+        return content
+
+    def poll_file_until_complete(
+        self,
+        file_id: str,
+        interval: int = 5,
+        max_retries: int = 60,
+        output_path: Optional[str] = None,
+        return_dataframe: bool = True,
+    ) -> Union[pd.DataFrame, str, bytes]:
+        """
+        Poll the status of a file until it is complete, then download and return the results.
+
+        Args:
+            file_id: ID of the file upload
+            interval: Polling interval in seconds
+            max_retries: Maximum number of polling attempts
+            output_path: Path to save the downloaded file. If None, the file will not be saved locally.
+            return_dataframe: Whether to return the results as a pandas DataFrame
+
+        Returns:
+            If return_dataframe is True, returns a pandas DataFrame with the validation results.
+            If return_dataframe is False and output_path is provided, returns the path to the downloaded file.
+            If return_dataframe is False and output_path is None, returns the file content as bytes.
+
+        Raises:
+            TimeoutError: If the file processing takes longer than interval * max_retries seconds
+            ValidizError: If there's an error with the API call
+        """
+        for attempt in range(max_retries):
+            status = self.get_file_status(file_id)
+
+            if status["status"] == "completed":
+                # If output_path is provided, download the file to disk
+                if output_path is not None:
+                    file_path = self.download_file(file_id, output_path)
+
+                    if return_dataframe:
+                        # Try to determine the file format and read it
+                        try:
+                            if file_path.endswith(".csv"):
+                                return pd.read_csv(file_path)
+                            elif file_path.endswith(".xlsx") or file_path.endswith(
+                                ".xls"
+                            ):
+                                return pd.read_excel(file_path)
+                            else:
+                                # Default to CSV
+                                return pd.read_csv(file_path)
+                        except Exception as e:
+                            raise ValidizError(f"Error parsing result file: {str(e)}")
+                    else:
+                        return file_path
+                # If output_path is None, get the content in memory
+                else:
+                    content = self.get_file_content(file_id)
+
+                    if return_dataframe:
+                        try:
+                            # Attempt to parse as CSV by default
+                            return pd.read_csv(io.BytesIO(content))
+                        except Exception as e:
+                            try:
+                                # If CSV fails, try Excel
+                                return pd.read_excel(io.BytesIO(content))
+                            except Exception:
+                                raise ValidizError(
+                                    f"Error parsing file content: {str(e)}"
+                                )
+                    else:
+                        return content
+
+            elif status["status"] == "failed":
+                error_message = status.get("error_message", "File processing failed")
+                raise ValidizError(error_message)
+
+            # Wait for the next polling interval
+            self._wait_interval(interval)
+
+        raise TimeoutError(
+            f"File processing timed out after {interval * max_retries} seconds"
+        )

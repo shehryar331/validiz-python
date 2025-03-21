@@ -14,3 +14,5 @@ lint:
 mypy: 
 	uv run mypy . --check-untyped-defs
 
+.PHONY: qa
+qa: sort format lint
