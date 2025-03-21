@@ -38,6 +38,30 @@ class AsyncValidiz(BaseClient):
         self.timeout = timeout
         self._session: Optional[aiohttp.ClientSession] = None
 
+    async def __aenter__(self):
+        """
+        Enter the async context manager and create a session.
+        
+        Returns:
+            The client instance
+        """
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession(
+                timeout=aiohttp.ClientTimeout(total=self.timeout)
+            )
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """
+        Exit the async context manager and close the session.
+        
+        Args:
+            exc_type: Exception type if an exception was raised
+            exc_val: Exception value if an exception was raised
+            exc_tb: Exception traceback if an exception was raised
+        """
+        await self.close()
+
     async def _wait_interval(self, interval: int):
         """
         Wait for the specified interval.

@@ -9,3 +9,8 @@
 test_files/
 .env
 *.csv
+build/
+dist/
+*.egg-info/
+*.log
+API_DOCUMENTATION.md
