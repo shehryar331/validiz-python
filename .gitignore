@@ -16,3 +16,5 @@ dist/
 API_DOCUMENTATION.md
 .DS_Store
 .pypirc
+.coverage
+uv.lock
