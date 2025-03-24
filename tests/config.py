@@ -15,7 +15,7 @@ MOCK_EMAIL_RESPONSE = [
         "domain": "example.com",
         "smtp_provider": "Google",
         "mx_found": True,
-        "mx_record": ["example-com.mail.protection.outlook.com"]
+        "mx_record": ["example-com.mail.protection.outlook.com"],
     },
     {
         "email": "invalid@example.com",
@@ -28,14 +28,11 @@ MOCK_EMAIL_RESPONSE = [
         "domain": "example.com",
         "smtp_provider": "Google",
         "mx_found": True,
-        "mx_record": ["example-com.mail.protection.outlook.com"]
-    }
+        "mx_record": ["example-com.mail.protection.outlook.com"],
+    },
 ]
 
-MOCK_FILE_UPLOAD_RESPONSE = {
-    "file_id": "file_12345",
-    "status": "processing"
-}
+MOCK_FILE_UPLOAD_RESPONSE = {"file_id": "file_12345", "status": "processing"}
 
 MOCK_FILE_STATUS_RESPONSE = {
     "file_id": "file_12345",
@@ -43,7 +40,7 @@ MOCK_FILE_STATUS_RESPONSE = {
     "total_emails": 100,
     "processed_emails": 100,
     "valid_emails": 80,
-    "invalid_emails": 20
+    "invalid_emails": 20,
 }
 
 MOCK_FILE_STATUS_PROCESSING_RESPONSE = {
@@ -52,13 +49,13 @@ MOCK_FILE_STATUS_PROCESSING_RESPONSE = {
     "total_emails": 100,
     "processed_emails": 50,
     "valid_emails": 40,
-    "invalid_emails": 10
+    "invalid_emails": 10,
 }
 
 MOCK_FILE_STATUS_FAILED_RESPONSE = {
     "file_id": "file_12345",
     "status": "failed",
-    "error_message": "Invalid file format"
+    "error_message": "Invalid file format",
 }
 
-MOCK_FILE_CONTENT = b"email,is_valid,status\nvalid@example.com,True,valid\ninvalid@example.com,False,invalid" 
+MOCK_FILE_CONTENT = b"email,is_valid,status\nvalid@example.com,True,valid\ninvalid@example.com,False,invalid"

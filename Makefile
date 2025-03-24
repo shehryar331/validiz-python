@@ -12,7 +12,7 @@ lint:
 
 .PHONY: mypy
 mypy: 
-	uv run mypy . --check-untyped-defs
+	uv run mypy . --exclude 'build/' --check-untyped-defs
 
 .PHONY: qa
 qa: sort format lint

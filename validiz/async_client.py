@@ -8,7 +8,11 @@ import aiohttp
 import pandas as pd
 
 from validiz._base_client import BaseClient
-from validiz._exceptions import ValidizConnectionError, ValidizError
+from validiz._exceptions import (
+    ValidizConnectionError,
+    ValidizError,
+    ValidizTimeoutError,
+)
 from validiz._response_handling import handle_async_response
 from validiz._schema import EmailResponse
 
@@ -41,7 +45,7 @@ class AsyncValidiz(BaseClient):
     async def __aenter__(self):
         """
         Enter the async context manager and create a session.
-        
+
         Returns:
             The client instance
         """
@@ -54,7 +58,7 @@ class AsyncValidiz(BaseClient):
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """
         Exit the async context manager and close the session.
-        
+
         Args:
             exc_type: Exception type if an exception was raised
             exc_val: Exception value if an exception was raised
@@ -136,6 +140,8 @@ class AsyncValidiz(BaseClient):
                     timeout=self.timeout,
                 ) as response:
                     return await handle_async_response(response)
+        except asyncio.TimeoutError:
+            raise ValidizTimeoutError(timeout=self.timeout)
         except aiohttp.ClientError as e:
             raise ValidizConnectionError(f"Connection error: {str(e)}")
 

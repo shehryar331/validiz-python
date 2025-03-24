@@ -1,5 +1,5 @@
 """Unit tests for synchronous Validiz client."""
-import io
+
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -187,17 +187,19 @@ class TestValidizSyncClient(unittest.TestCase):
             MOCK_FILE_STATUS_PROCESSING_RESPONSE,
             MOCK_FILE_STATUS_RESPONSE,
         ]
-        
+
         # Mock the content response
         mock_get_content.return_value = MOCK_FILE_CONTENT
 
         # Mock the DataFrame creation
         with patch("pandas.read_csv") as mock_read_csv:
-            mock_df = pd.DataFrame({
-                "email": ["valid@example.com", "invalid@example.com"],
-                "is_valid": [True, False],
-                "status": ["valid", "invalid"],
-            })
+            mock_df = pd.DataFrame(
+                {
+                    "email": ["valid@example.com", "invalid@example.com"],
+                    "is_valid": [True, False],
+                    "status": ["valid", "invalid"],
+                }
+            )
             mock_read_csv.return_value = mock_df
 
             # Call the method
@@ -220,11 +222,11 @@ class TestValidizSyncClient(unittest.TestCase):
 
         # Call the method and check for exception
         with self.assertRaises(ValidizError) as context:
-            self.client.poll_file_until_complete("file_12345", interval=1, max_retries=2)
+            self.client.poll_file_until_complete(
+                "file_12345", interval=1, max_retries=2
+            )
 
-        self.assertEqual(
-            str(context.exception), "Invalid file format"
-        )
+        self.assertEqual(str(context.exception), "Invalid file format")
 
     @patch("validiz.client.requests.request")
     def test_auth_error(self, mock_request):
@@ -235,13 +237,17 @@ class TestValidizSyncClient(unittest.TestCase):
         mock_response.json.return_value = {
             "error": {"message": "Invalid API key", "code": "auth_error"}
         }
+        mock_response.url = "https://api.validiz.com/v1/mock-endpoint"
         mock_request.return_value = mock_response
 
         # Call the method and check for exception
         with self.assertRaises(ValidizAuthError) as context:
             self.client.validate_email("valid@example.com")
 
-        self.assertEqual(str(context.exception), "Invalid API key")
+        self.assertEqual(
+            str(context.exception),
+            "Invalid API key (HTTP 401) [Error code: auth_error]",
+        )
         self.assertEqual(context.exception.status_code, 401)
         self.assertEqual(context.exception.error_code, "auth_error")
 
@@ -254,13 +260,17 @@ class TestValidizSyncClient(unittest.TestCase):
         mock_response.json.return_value = {
             "error": {"message": "Rate limit exceeded", "code": "rate_limit_exceeded"}
         }
+        mock_response.url = "https://api.validiz.com/v1/mock-endpoint"
         mock_request.return_value = mock_response
 
         # Call the method and check for exception
         with self.assertRaises(ValidizRateLimitError) as context:
             self.client.validate_email("valid@example.com")
 
-        self.assertEqual(str(context.exception), "Rate limit exceeded")
+        self.assertEqual(
+            str(context.exception),
+            "Rate limit exceeded (HTTP 429) [Error code: rate_limit_exceeded] - Please wait before making more requests or consider upgrading your plan.",
+        )
         self.assertEqual(context.exception.status_code, 429)
         self.assertEqual(context.exception.error_code, "rate_limit_exceeded")
 

@@ -1,4 +1,5 @@
 """Test utilities for Validiz tests."""
+
 import os
 import tempfile
 
@@ -12,4 +13,4 @@ def create_temp_csv_file():
         return path
     except Exception:
         os.remove(path)
-        raise 
+        raise

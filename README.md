@@ -279,29 +279,66 @@ asyncio.run(process_multiple_files())
 
 ## Error Handling
 
-The library provides several exception classes for different types of errors:
+The library provides a comprehensive set of exception classes for different types of errors:
 
 ```python
 from validiz import (
-    ValidizError,  # Base exception
-    ValidizAuthError,  # Authentication errors
-    ValidizRateLimitError,  # Rate limit exceeded
-    ValidizValidationError,  # Validation errors
-    ValidizNotFoundError,  # Resource not found
-    ValidizConnectionError  # Connection errors
+    ValidizError,              # Base exception for all errors
+    ValidizAuthError,          # Authentication errors (HTTP 401)
+    ValidizRateLimitError,     # Rate limit exceeded errors (HTTP 429)
+    ValidizValidationError,    # Validation errors (HTTP 400, 422)
+    ValidizNotFoundError,      # Resource not found errors (HTTP 404)
+    ValidizConnectionError,    # Connection errors (network issues)
+    ValidizPaymentRequiredError, # Payment required errors (HTTP 402/403)
+    ValidizServerError,        # Server-side errors (HTTP 500, 502, 503, 504)
+    ValidizTimeoutError        # Request timeout errors
 )
 
 try:
     # Make API call
     results = client.validate_email("user@example.com")
 except ValidizAuthError as e:
-    print(f"Authentication error: {e.message}")
+    print(f"Authentication error: {e}")  # Improved error messages
 except ValidizRateLimitError as e:
-    print(f"Rate limit exceeded: {e.message}")
+    print(f"Rate limit exceeded: {e}")  # Includes advice about waiting
+except ValidizPaymentRequiredError as e:
+    print(f"Payment required: {e}")  # Includes advice about adding credits
 except ValidizConnectionError as e:
-    print(f"Connection error: {e.message}")
+    print(f"Connection error: {e}")
+except ValidizServerError as e:
+    print(f"Server error: {e}")  # Includes advice about retrying or contacting support
 except ValidizError as e:
-    print(f"API error (status {e.status_code}): {e.message}")
+    print(f"API error (status {e.status_code}): {e}")
+```
+
+### Error Details
+
+All exceptions include:
+- `message`: Human-readable error message
+- `status_code`: HTTP status code (if applicable)
+- `error_code`: API-specific error code (if available)
+- `details`: Additional error details (if available)
+
+For example:
+```python
+except ValidizError as e:
+    print(f"Error: {e.message}")
+    print(f"Status Code: {e.status_code}")
+    print(f"Error Code: {e.error_code}")
+    print(f"Details: {e.details}")
+```
+
+### Logging
+
+The library uses Python's standard logging module. You can configure it to see what's happening:
+
+```python
+import logging
+
+# Configure logging to see API errors
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("validiz")
+logger.setLevel(logging.DEBUG)
 ```
 
 ## Examples

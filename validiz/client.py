@@ -7,7 +7,11 @@ import pandas as pd
 import requests
 
 from validiz._base_client import BaseClient
-from validiz._exceptions import ValidizConnectionError, ValidizError
+from validiz._exceptions import (
+    ValidizConnectionError,
+    ValidizError,
+    ValidizTimeoutError,
+)
 from validiz._response_handling import handle_sync_response
 from validiz._schema import EmailResponse
 
@@ -80,6 +84,8 @@ class Validiz(BaseClient):
                 timeout=self.timeout,
             )
             return handle_sync_response(response)
+        except requests.Timeout:
+            raise ValidizTimeoutError(timeout=self.timeout)
         except requests.RequestException as e:
             raise ValidizConnectionError(f"Connection error: {str(e)}")
 
@@ -93,8 +99,6 @@ class Validiz(BaseClient):
         Returns:
             List of EmailResponse instances containing validation results
         """
-        if isinstance(emails, str):
-            emails = [emails]
 
         data = {"emails": emails}
 

@@ -1,6 +1,6 @@
 """Unit tests for asynchronous Validiz client."""
+
 import asyncio
-import io
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -36,6 +36,7 @@ class MockClientResponse:
         self.headers = headers
         self._data = data
         self._content = content if content is not None else b""
+        self.url = "https://api.validiz.com/v1/mock-endpoint"  # Add url attribute
 
     async def __aenter__(self):
         return self
@@ -50,7 +51,11 @@ class MockClientResponse:
         return self._content
 
     async def text(self):
-        return self._content.decode() if isinstance(self._content, bytes) else str(self._content)
+        return (
+            self._content.decode()
+            if isinstance(self._content, bytes)
+            else str(self._content)
+        )
 
 
 @pytest.mark.unit
@@ -71,7 +76,7 @@ class TestValidizAsyncClient(unittest.TestCase):
 
         if os.path.exists(self.test_file_path):
             os.remove(self.test_file_path)
-        
+
         # Close the event loop
         self.loop.close()
 
@@ -199,14 +204,18 @@ class TestValidizAsyncClient(unittest.TestCase):
 
         with patch("validiz._response_handling.handle_async_response") as mock_handler:
             mock_handler.return_value = asyncio.Future()
-            mock_handler.return_value.set_result({
-                "content": MOCK_FILE_CONTENT,
-                "content_type": "text/csv",
-            })
+            mock_handler.return_value.set_result(
+                {
+                    "content": MOCK_FILE_CONTENT,
+                    "content_type": "text/csv",
+                }
+            )
 
             # Call the method with a custom output path
             output_path = "test_output.csv"
-            result = self.run_async(self.client.download_file("file_12345", output_path))
+            result = self.run_async(
+                self.client.download_file("file_12345", output_path)
+            )
 
             # Assertions
             mock_request.assert_called_once()
@@ -228,10 +237,12 @@ class TestValidizAsyncClient(unittest.TestCase):
 
         with patch("validiz._response_handling.handle_async_response") as mock_handler:
             mock_handler.return_value = asyncio.Future()
-            mock_handler.return_value.set_result({
-                "content": MOCK_FILE_CONTENT,
-                "content_type": "text/csv",
-            })
+            mock_handler.return_value.set_result(
+                {
+                    "content": MOCK_FILE_CONTENT,
+                    "content_type": "text/csv",
+                }
+            )
 
             # Call the method
             content = self.run_async(self.client.get_file_content("file_12345"))
@@ -242,6 +253,10 @@ class TestValidizAsyncClient(unittest.TestCase):
 
     def test_poll_file_until_complete(self):
         """Test polling a file until complete."""
+
+        # Initialize call_count before the function definition
+        call_count = 0
+
         # Instead of patching with autospec=True, we'll directly patch the method
         # and have it return the values we want
         async def mock_get_status_side_effect(self, file_id):
@@ -251,26 +266,27 @@ class TestValidizAsyncClient(unittest.TestCase):
                 return MOCK_FILE_STATUS_PROCESSING_RESPONSE
             else:
                 return MOCK_FILE_STATUS_RESPONSE
-            
+
         async def mock_get_content(self, file_id):
             return MOCK_FILE_CONTENT
-            
+
         async def mock_wait_interval(self, seconds):
             pass
-            
-        call_count = 0
-        
-        with patch.object(AsyncValidiz, "get_file_status", mock_get_status_side_effect), \
-             patch.object(AsyncValidiz, "get_file_content", mock_get_content), \
-             patch.object(AsyncValidiz, "_wait_interval", mock_wait_interval):
 
+        with (
+            patch.object(AsyncValidiz, "get_file_status", mock_get_status_side_effect),
+            patch.object(AsyncValidiz, "get_file_content", mock_get_content),
+            patch.object(AsyncValidiz, "_wait_interval", mock_wait_interval),
+        ):
             # Mock pandas read_csv
             with patch("pandas.read_csv") as mock_read_csv:
-                mock_df = pd.DataFrame({
-                    "email": ["valid@example.com", "invalid@example.com"],
-                    "is_valid": [True, False],
-                    "status": ["valid", "invalid"],
-                })
+                mock_df = pd.DataFrame(
+                    {
+                        "email": ["valid@example.com", "invalid@example.com"],
+                        "is_valid": [True, False],
+                        "status": ["valid", "invalid"],
+                    }
+                )
                 mock_read_csv.return_value = mock_df
 
                 # Call the method
@@ -281,17 +297,20 @@ class TestValidizAsyncClient(unittest.TestCase):
                 )
 
                 # Assertions
-                self.assertEqual(call_count, 2)  # Verify get_file_status was called twice
+                self.assertEqual(
+                    call_count, 2
+                )  # Verify get_file_status was called twice
                 self.assertTrue(isinstance(result, pd.DataFrame))
                 self.assertEqual(len(result), 2)
 
     def test_poll_file_failed(self):
         """Test polling a file that failed."""
+
         # Instead of patching with autospec=True, we'll directly patch the method
         # to return the failed status
         async def mock_get_failed_status(self, file_id):
             return MOCK_FILE_STATUS_FAILED_RESPONSE
-            
+
         with patch.object(AsyncValidiz, "get_file_status", mock_get_failed_status):
             # Call the method and check for exception
             with self.assertRaises(ValidizError) as context:
@@ -318,7 +337,10 @@ class TestValidizAsyncClient(unittest.TestCase):
         with self.assertRaises(ValidizAuthError) as context:
             self.run_async(self.client.validate_email("valid@example.com"))
 
-        self.assertEqual(str(context.exception), "Invalid API key")
+        self.assertEqual(
+            str(context.exception),
+            "Invalid API key (HTTP 401) [Error code: auth_error]",
+        )
         self.assertEqual(context.exception.status_code, 401)
         self.assertEqual(context.exception.error_code, "auth_error")
 
@@ -329,7 +351,12 @@ class TestValidizAsyncClient(unittest.TestCase):
         mock_response = MockClientResponse(
             status=429,
             headers={"Content-Type": "application/json"},
-            data={"error": {"message": "Rate limit exceeded", "code": "rate_limit_exceeded"}},
+            data={
+                "error": {
+                    "message": "Rate limit exceeded",
+                    "code": "rate_limit_exceeded",
+                }
+            },
         )
         mock_request.return_value = mock_response
 
@@ -337,7 +364,10 @@ class TestValidizAsyncClient(unittest.TestCase):
         with self.assertRaises(ValidizRateLimitError) as context:
             self.run_async(self.client.validate_email("valid@example.com"))
 
-        self.assertEqual(str(context.exception), "Rate limit exceeded")
+        self.assertEqual(
+            str(context.exception),
+            "Rate limit exceeded (HTTP 429) [Error code: rate_limit_exceeded] - Please wait before making more requests or consider upgrading your plan.",
+        )
         self.assertEqual(context.exception.status_code, 429)
         self.assertEqual(context.exception.error_code, "rate_limit_exceeded")
 
@@ -355,6 +385,7 @@ class TestValidizAsyncClient(unittest.TestCase):
 
     def test_async_context_manager(self):
         """Test using the async client as a context manager."""
+
         async def run_test():
             # Mock the response
             with patch("aiohttp.ClientSession.request") as mock_request:
@@ -368,12 +399,12 @@ class TestValidizAsyncClient(unittest.TestCase):
                 # Use as context manager
                 async with AsyncValidiz(api_key=TEST_API_KEY) as client:
                     results = await client.validate_email("valid@example.com")
-                    
+
                     # Assertions
                     self.assertEqual(len(results), 2)
                     self.assertEqual(results[0].email, "valid@example.com")
                     self.assertTrue(results[0].is_valid)
-        
+
         self.run_async(run_test())
 
 

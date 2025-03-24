@@ -1,4 +1,5 @@
 """Unit tests for Validiz exceptions."""
+
 import unittest
 
 import pytest
@@ -31,9 +32,11 @@ class TestValidizExceptions(unittest.TestCase):
             message="Test error with params",
             status_code=400,
             error_code="test_error",
-            details={"field": "value"}
+            details={"field": "value"},
         )
-        self.assertEqual(str(error), "Test error with params")
+        self.assertEqual(
+            str(error), "Test error with params (HTTP 400) [Error code: test_error]"
+        )
         self.assertEqual(error.message, "Test error with params")
         self.assertEqual(error.status_code, 400)
         self.assertEqual(error.error_code, "test_error")
@@ -50,7 +53,7 @@ class TestValidizExceptions(unittest.TestCase):
             message="Invalid API key",
             status_code=401,
             error_code="auth_error",
-            details={"hint": "Check your API key"}
+            details={"hint": "Check your API key"},
         )
         self.assertEqual(error.message, "Invalid API key")
         self.assertEqual(error.status_code, 401)
@@ -60,7 +63,10 @@ class TestValidizExceptions(unittest.TestCase):
     def test_rate_limit_error(self):
         """Test ValidizRateLimitError exception."""
         error = ValidizRateLimitError("Rate limit exceeded")
-        self.assertEqual(str(error), "Rate limit exceeded")
+        self.assertEqual(
+            str(error),
+            "Rate limit exceeded - Please wait before making more requests or consider upgrading your plan.",
+        )
         self.assertTrue(isinstance(error, ValidizError))
 
         # Test with additional parameters
@@ -68,7 +74,7 @@ class TestValidizExceptions(unittest.TestCase):
             message="Rate limit exceeded",
             status_code=429,
             error_code="rate_limit_exceeded",
-            details={"retry_after": 60}
+            details={"retry_after": 60},
         )
         self.assertEqual(error.message, "Rate limit exceeded")
         self.assertEqual(error.status_code, 429)
@@ -86,7 +92,7 @@ class TestValidizExceptions(unittest.TestCase):
             message="Invalid email format",
             status_code=422,
             error_code="validation_error",
-            details={"errors": ["Email is invalid"]}
+            details={"errors": ["Email is invalid"]},
         )
         self.assertEqual(error.message, "Invalid email format")
         self.assertEqual(error.status_code, 422)
@@ -104,7 +110,7 @@ class TestValidizExceptions(unittest.TestCase):
             message="File not found",
             status_code=404,
             error_code="not_found",
-            details={"file_id": "file_12345"}
+            details={"file_id": "file_12345"},
         )
         self.assertEqual(error.message, "File not found")
         self.assertEqual(error.status_code, 404)
@@ -122,7 +128,7 @@ class TestValidizExceptions(unittest.TestCase):
             message="Connection timeout",
             status_code=None,
             error_code="connection_error",
-            details={"timeout": 30}
+            details={"timeout": 30},
         )
         self.assertEqual(error.message, "Connection timeout")
         self.assertIsNone(error.status_code)

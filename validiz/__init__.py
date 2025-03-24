@@ -3,7 +3,10 @@ from validiz._exceptions import (
     ValidizConnectionError,
     ValidizError,
     ValidizNotFoundError,
+    ValidizPaymentRequiredError,
     ValidizRateLimitError,
+    ValidizServerError,
+    ValidizTimeoutError,
     ValidizValidationError,
 )
 from validiz.async_client import AsyncValidiz
@@ -19,4 +22,7 @@ __all__ = [
     "ValidizValidationError",
     "ValidizNotFoundError",
     "ValidizConnectionError",
+    "ValidizPaymentRequiredError",
+    "ValidizServerError",
+    "ValidizTimeoutError",
 ]
