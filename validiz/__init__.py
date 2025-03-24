@@ -12,7 +12,7 @@ from validiz._exceptions import (
 from validiz.async_client import AsyncValidiz
 from validiz.client import Validiz
 
-__version__ = "1.0.0"
+__version__ = "1.1.0"
 __all__ = [
     "Validiz",
     "AsyncValidiz",

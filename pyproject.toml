@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "validiz"
-version = "1.0.0"
+version = "1.1.0"
 description = "A Python client library for the Validiz Email Validation API"
 readme = "README.md"
 authors = [
